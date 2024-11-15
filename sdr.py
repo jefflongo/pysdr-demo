@@ -4,22 +4,28 @@ from matplotlib.ticker import MultipleLocator
 
 import util
 
-nbits = 1024
-modulation_order = 2
+n_symbols = 100
+modulation_order = 1
 modulate_qam = False
+snr_db = 20
 
 plot_constellation = True
 
-bits = util.generate_bit_sequence(nbits)
+bits = util.generate_bit_sequence(n_symbols * modulation_order)
+
 constellation, symbols = (
     util.modulate_qam(bits, modulation_order)
     if modulate_qam
     else util.modulate_psk(bits, modulation_order)
 )
 
+noise = util.generate_awgn(symbols, snr_db)
+symbols += noise
+
 if plot_constellation:
     _, ax = plt.subplots()
     ax.set_box_aspect(1)
+    ax.axis("equal")
 
     if modulate_qam:
         ax.grid(True)
@@ -31,7 +37,9 @@ if plot_constellation:
             plt.Circle((0, 0), 1, color="k", linewidth=1, fill=False, alpha=0.3)
         )
 
-    ax.plot(np.real(constellation), np.imag(constellation), "o")
+    ax.plot(np.real(symbols), np.imag(symbols), ".")
+
+    ax.plot(np.real(constellation), np.imag(constellation), "r.")
     for i, symbol in enumerate(constellation):
         ax.annotate(xy=(symbol.real, symbol.imag), text=f"{i:>0{modulation_order}b}")
 

@@ -6,6 +6,22 @@ def generate_bit_sequence(n):
     return np.random.randint(2, size=n, dtype=np.uint8)
 
 
+def generate_awgn(s, snr_db):
+    """Generates complex AWGN with a given SNR, in dB, relative to the signal `s`."""
+    snr = 10 ** (snr_db / 10)
+    n = len(s)
+
+    # signal power can alternatively be estimated as np.var(s) if the mean is near zero
+    p_signal = np.mean(np.abs(s) ** 2)
+    p_noise = p_signal / snr
+
+    # samples from the normal distribution have a power level (variance) of 1. to achieve a variance
+    # of `p_noise`, we must adjust the standard deviation of the distribution by scaling it by
+    # `sqrt(p_noise)`. furthermore, the noise power should be distributed equally between the real
+    # and imaginary portions. thus, we scale by `sqrt(p_noise / 2)`
+    return np.sqrt(p_noise / 2) * (np.random.randn(n) + 1j * np.random.randn(n))
+
+
 def generate_gray_code(n):
     """Generates the first `n` elements of the gray code."""
     return np.array(list(map(lambda x: x ^ (x >> 1), np.arange(n))))
@@ -30,9 +46,8 @@ def modulate_psk(bits, order):
     nbits = 1 << order
 
     # generate the phase angles for the given order of PSK modulation
-    # i.e. this will be [0, 180] degrees for BPSK and [45, 135, 225, 315] degrees for QPSK.
-    phase_offset = np.pi / nbits
-    phase_angles = np.linspace(0, 2 * np.pi, nbits, endpoint=False) + phase_offset
+    # i.e. this will be [0, 180] degrees for BPSK and [0, 90, 180, 270] degrees for QPSK.
+    phase_angles = np.linspace(0, 2 * np.pi, nbits, endpoint=False)
 
     # generate the complex coordinates for the constellation
     # alternatively: constellation = np.cos(phase_angles) + 1j * np.sin(phase_angles)
