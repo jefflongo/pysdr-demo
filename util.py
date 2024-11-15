@@ -22,6 +22,65 @@ def generate_awgn(s, snr_db):
     return np.sqrt(p_noise / 2) * (np.random.randn(n) + 1j * np.random.randn(n))
 
 
+def generate_pulse_shaping_filter(samples_per_symbol, ntaps=101, rolloff=0.35):
+    """Generates a root-raised cosine pulse shaping filter.
+
+    Pulse shaping should occur after upsampling. `samples_per_symbol` is the upsampling rate. A
+    higher upsampling rate produce a wider filter.
+
+    `ntaps` controls the number of coefficients, and thus, the computational complexity of the
+    filter. more taps will ensure the filter decays to zero. `ntaps` should be odd so that there is
+    a center tap.
+
+    `rolloff` is a value between 0 and 1, usually between 0.2 and 0.5 that controls the "sharpness"
+    of the filter's edges. a "sharper" filter (smaller rolloff) will use less bandwidth. however,
+    it will take longer to decay to zero in the time domain, and thus require more taps.
+
+    The returned filter has a gain of `samples_per_symbol`.
+    """
+    beta = rolloff
+    Ts = samples_per_symbol
+    t = np.arange(-(ntaps // 2), ntaps // 2 + 1)
+    h = np.zeros(ntaps)
+
+    if beta == 0:
+        h = np.sinc(t / Ts)
+    else:
+        # there are 3 cases depending on the value of t. get the indices where each case is true.
+        t0 = np.where(np.isclose(t, 0))
+        t1 = np.where(np.isclose(np.abs(t), Ts / (4 * beta)))
+        t2 = np.setdiff1d(np.arange(ntaps), np.union1d(t0, t1))
+
+        # see https://en.wikipedia.org/wiki/Root-raised-cosine_filter
+        h[t0] = 1 + beta * (4 / np.pi - 1)
+        h[t1] = (beta / np.sqrt(2)) * (
+            (1 + 2 / np.pi) * np.sin(np.pi / (4 * beta))
+            + (1 - 2 / np.pi) * np.cos(np.pi / (4 * beta))
+        )
+        h[t2] = (
+            np.sin(np.pi * t[t2] / Ts * (1 - beta))
+            + 4 * beta * t[t2] / Ts * np.cos(np.pi * t[t2] / Ts * (1 + beta))
+        ) / (np.pi * t[t2] / Ts * (1 - (4 * beta * t[t2] / Ts) ** 2))
+
+    return h
+
+
+def fft(s, n=None):
+    """Perform a `n`-point (default `len(s)`) Fast Fourier Transform of `s`.
+
+    Returns a tuple containing the frequency bins and the (magnitude) response.
+    """
+    return np.fft.fftshift(np.fft.fftfreq(n)), np.fft.fftshift(np.abs(np.fft.fft(s, n)))
+
+
+def upsample(s, n):
+    """Upsample a signal `s` by a factor `n` by zero-stuffing."""
+    upsampled = np.zeros(len(s) * n, dtype=s.dtype)
+    upsampled[::n] = s
+
+    return upsampled
+
+
 def generate_gray_code(n):
     """Generates the first `n` elements of the gray code."""
     return np.array(list(map(lambda x: x ^ (x >> 1), np.arange(n))))
