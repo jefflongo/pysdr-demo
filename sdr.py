@@ -116,12 +116,7 @@ if PLOT_CONSTELLATION:
             plt.Circle((0, 0), 1, color="k", linewidth=1, fill=False, alpha=0.3)
         )
 
-    # TODO: plot received symbols instead
-    ax.plot(
-        np.real(symbols_upsampled[::UPSAMPLE_RATE]),
-        np.imag(symbols_upsampled[::UPSAMPLE_RATE]),
-        ".",
-    )
+    # TODO: plot received symbols
     ax.plot(np.real(constellation), np.imag(constellation), "r.")
     for i, symbol in enumerate(constellation):
         ax.annotate(xy=(symbol.real, symbol.imag), text=f"{i:>0{MODULATION_ORDER}b}")
