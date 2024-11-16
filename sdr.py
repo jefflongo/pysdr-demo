@@ -1,14 +1,19 @@
+import matplotlib
 import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.ticker import FuncFormatter, MultipleLocator
 
 import util
 
-# modulation/demodulation configuration
+#### CONFIGURATION #################################################################################
+
+# modulation configuration
 N_SYMBOLS = 100
-MODULATION_ORDER = 2
+MODULATION_ORDER = 1
 MODULATE_QAM = False
 UPSAMPLE_RATE = 8
+
+# noise configuration
 APPLY_NOISE = True
 SNR_DB = 20
 
@@ -16,6 +21,8 @@ SNR_DB = 20
 PLOT_PULSE_SHAPING_FILTER = True
 PLOT_PULSE_SHAPED_SYMBOLS = True
 PLOT_CONSTELLATION = True
+
+#### TRANSMITTER ###################################################################################
 
 # generate bit sequence
 bits = util.generate_bit_sequence(N_SYMBOLS * MODULATION_ORDER)
@@ -34,10 +41,22 @@ symbols_upsampled = util.upsample(symbols, UPSAMPLE_RATE)
 h = util.generate_pulse_shaping_filter(UPSAMPLE_RATE)
 symbols_pulse_shaped = np.convolve(symbols_upsampled, h)
 
+#### WIRELESS CHANNEL ##############################################################################
+
 # apply noise
 if APPLY_NOISE:
-    noise = util.generate_awgn(symbols_upsampled, SNR_DB)
-    symbols_upsampled += noise
+    noise = util.generate_awgn(symbols_pulse_shaped, SNR_DB)
+    symbols_pulse_shaped_with_noise = symbols_pulse_shaped + noise
+else:
+    symbols_pulse_shaped_with_noise = symbols_pulse_shaped
+
+# TODO: frequency/timing offset
+
+#### RECEIVER ######################################################################################
+
+#### PLOTS #########################################################################################
+
+matplotlib.rcParams["figure.figsize"] = (12, 10)
 
 if PLOT_PULSE_SHAPING_FILTER:
     ax1, ax2 = plt.subplot(2, 1, 1), plt.subplot(2, 1, 2)
@@ -63,9 +82,10 @@ if PLOT_PULSE_SHAPING_FILTER:
 
 if PLOT_PULSE_SHAPED_SYMBOLS:
     ax1, ax2 = plt.subplot(2, 1, 1), plt.subplot(2, 1, 2)
+
+    t = np.arange(len(symbols))
     ax1.set_title("Symbols")
     ax1.set_xlabel("t")
-    t = np.arange(N_SYMBOLS)
     ax1.step(t, np.real(symbols), label="I")
     ax1.step(t, np.imag(symbols), label="Q")
     ax1.legend()
@@ -96,6 +116,7 @@ if PLOT_CONSTELLATION:
             plt.Circle((0, 0), 1, color="k", linewidth=1, fill=False, alpha=0.3)
         )
 
+    # TODO: plot received symbols instead
     ax.plot(
         np.real(symbols_upsampled[::UPSAMPLE_RATE]),
         np.imag(symbols_upsampled[::UPSAMPLE_RATE]),
