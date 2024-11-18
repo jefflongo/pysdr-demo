@@ -11,7 +11,11 @@ import util
 N_SYMBOLS = 100
 MODULATION_ORDER = 1
 MODULATE_QAM = False
+
+# sampling configuration
+SYMBOL_RATE_HZ = 100
 UPSAMPLE_RATE = 8
+SAMPLE_RATE_HZ = SYMBOL_RATE_HZ * UPSAMPLE_RATE
 
 # noise configuration
 APPLY_NOISE = True
@@ -59,29 +63,30 @@ else:
 matplotlib.rcParams["figure.figsize"] = (12, 10)
 
 if PLOT_PULSE_SHAPING_FILTER:
-    ax1, ax2 = plt.subplot(2, 1, 1), plt.subplot(2, 1, 2)
+    fig, (ax1, ax2) = plt.subplots(2)
 
     t = np.arange(-(len(h) // 2), len(h) // 2 + 1)
+    ax1.axhline(0, color="gray")
     ax1.set_title("Pulse Shaping Filter Impulse Response")
     ax1.set_xlabel("t / Ts")
-    ax1.set_ylabel("h(t)", rotation=0)
     ax1.xaxis.set_major_locator(MultipleLocator(UPSAMPLE_RATE))
     ax1.xaxis.set_major_formatter(
         FuncFormatter(lambda x, _: f"{int(x / UPSAMPLE_RATE)}")
     )
-    ax1.grid(True)
+    ax1.grid()
     ax1.plot(t, h, ".-")
 
-    freqs, response = util.fft(h, 1024)
+    freqs, response = util.fft(h, fs=SAMPLE_RATE_HZ, n=1024)
     ax2.set_title("Pulse Shaping Filter Frequency Response")
     ax2.set_xlabel("f (Hz)")
-    ax2.set_ylabel("H(jw)", rotation=0)
-    ax2.grid(True)
+    ax2.grid()
     ax2.plot(freqs, response)
+
+    fig.tight_layout()
     plt.show()
 
 if PLOT_PULSE_SHAPED_SYMBOLS:
-    ax1, ax2 = plt.subplot(2, 1, 1), plt.subplot(2, 1, 2)
+    fig, (ax1, ax2, ax3, ax4) = plt.subplots(4)
 
     t = np.arange(len(symbols))
     ax1.set_title("Symbols")
@@ -96,6 +101,23 @@ if PLOT_PULSE_SHAPED_SYMBOLS:
     ax2.plot(np.imag(symbols_pulse_shaped), label="Q")
     ax2.legend()
 
+    symbol_freq, symbol_response = util.fft(
+        symbols_upsampled, fs=SAMPLE_RATE_HZ, n=1024
+    )
+    ax3.set_title("Symbols (Frequency Domain)")
+    ax3.set_xlabel("f (Hz)")
+    ax3.grid()
+    ax3.plot(symbol_freq, symbol_response)
+
+    symbol_ps_freq, symbol_ps_response = util.fft(
+        symbols_pulse_shaped, fs=SAMPLE_RATE_HZ, n=1024
+    )
+    ax4.set_title("Symbols (Pulse Shaped, Frequency Domain)")
+    ax4.set_xlabel("f (Hz)")
+    ax4.grid()
+    ax4.plot(symbol_ps_freq, symbol_ps_response)
+
+    fig.tight_layout()
     plt.show()
 
 if PLOT_CONSTELLATION:
@@ -107,7 +129,7 @@ if PLOT_CONSTELLATION:
     ax.axis("equal")
 
     if MODULATE_QAM:
-        ax.grid(True)
+        ax.grid()
         locator = MultipleLocator(np.sqrt(2) / (np.sqrt(1 << MODULATION_ORDER) - 1))
         ax.xaxis.set_major_locator(locator)
         ax.yaxis.set_major_locator(locator)

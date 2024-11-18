@@ -65,12 +65,14 @@ def generate_pulse_shaping_filter(samples_per_symbol, ntaps=101, rolloff=0.35):
     return h
 
 
-def fft(s, n=None):
-    """Perform a `n`-point (default `len(s)`) Fast Fourier Transform of `s`.
+def fft(s, fs=1.0, n=None):
+    """Perform a `n`-point (default `len(s)`) Fast Fourier Transform of `s` at sample rate `fs`.
 
     Returns a tuple containing the frequency bins and the (magnitude) response.
     """
-    return np.fft.fftshift(np.fft.fftfreq(n)), np.fft.fftshift(np.abs(np.fft.fft(s, n)))
+    bins = np.fft.fftshift(np.fft.fftfreq(n, 1 / fs))
+    response = np.fft.fftshift(np.abs(np.fft.fft(s, n)))
+    return bins, response
 
 
 def upsample(s, n):
