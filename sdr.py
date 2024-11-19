@@ -25,7 +25,7 @@ SNR_DB = 20
 
 # plotting configuration
 PLOT_PULSE_SHAPING_FILTER = False
-PLOT_PULSE_SHAPED_SYMBOLS = False
+PLOT_PULSE_SHAPED_SYMBOLS = True
 PLOT_CONSTELLATION = True
 
 #### TRANSMITTER ###################################################################################
@@ -66,9 +66,7 @@ received_signal = util.firfilter(symbols_pulse_shaped_with_noise, h)
 received_signal /= GAIN_CORRECTION
 
 # clock recovery
-recovered_symbols = demodulate.recover_symbols_early_late(
-    received_signal, UPSAMPLE_RATE
-)
+recovered_symbols = demodulate.recover_symbols_gardner(received_signal, UPSAMPLE_RATE)
 
 #### PLOTS #########################################################################################
 
