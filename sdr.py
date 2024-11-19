@@ -3,6 +3,8 @@ import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.ticker import FuncFormatter, MultipleLocator
 
+import demodulate
+import modulate
 import util
 
 #### CONFIGURATION #################################################################################
@@ -22,8 +24,8 @@ APPLY_NOISE = True
 SNR_DB = 20
 
 # plotting configuration
-PLOT_PULSE_SHAPING_FILTER = True
-PLOT_PULSE_SHAPED_SYMBOLS = True
+PLOT_PULSE_SHAPING_FILTER = False
+PLOT_PULSE_SHAPED_SYMBOLS = False
 PLOT_CONSTELLATION = True
 
 #### TRANSMITTER ###################################################################################
@@ -33,9 +35,9 @@ bits = util.generate_bit_sequence(N_SYMBOLS * MODULATION_ORDER)
 
 # modulate
 constellation, symbols = (
-    util.modulate_qam(bits, MODULATION_ORDER)
+    modulate.modulate_qam(bits, MODULATION_ORDER)
     if MODULATE_QAM
-    else util.modulate_psk(bits, MODULATION_ORDER)
+    else modulate.modulate_psk(bits, MODULATION_ORDER)
 )
 
 # upsample
@@ -43,7 +45,7 @@ symbols_upsampled = util.upsample(symbols, UPSAMPLE_RATE)
 
 # pulse shape
 h = util.generate_pulse_shaping_filter(UPSAMPLE_RATE)
-symbols_pulse_shaped = np.convolve(symbols_upsampled, h)
+symbols_pulse_shaped = util.firfilter(symbols_upsampled, h)
 
 #### WIRELESS CHANNEL ##############################################################################
 
@@ -57,6 +59,16 @@ else:
 # TODO: frequency/timing offset
 
 #### RECEIVER ######################################################################################
+
+# apply matched filter
+GAIN_CORRECTION = UPSAMPLE_RATE
+received_signal = util.firfilter(symbols_pulse_shaped_with_noise, h)
+received_signal /= GAIN_CORRECTION
+
+# clock recovery
+recovered_symbols = demodulate.recover_symbols_early_late(
+    received_signal, UPSAMPLE_RATE
+)
 
 #### PLOTS #########################################################################################
 
@@ -88,17 +100,21 @@ if PLOT_PULSE_SHAPING_FILTER:
 if PLOT_PULSE_SHAPED_SYMBOLS:
     fig, (ax1, ax2, ax3, ax4) = plt.subplots(4)
 
-    t = np.arange(len(symbols))
-    ax1.set_title("Symbols")
+    t = np.linspace(0, N_SYMBOLS * SAMPLE_RATE_HZ, SAMPLE_RATE_HZ)
+
+    color1, color2 = plt.rcParams["axes.prop_cycle"].by_key()["color"][:2]
+    ax1.set_title("Symbols (Upsampled)")
     ax1.set_xlabel("t")
-    ax1.step(t, np.real(symbols), label="I")
-    ax1.step(t, np.imag(symbols), label="Q")
+    ax1.vlines(t, 0, np.real(symbols_upsampled), colors=color1, alpha=0.7)
+    ax1.scatter(t, np.real(symbols_upsampled), label="I", marker=".", alpha=0.7)
+    ax1.vlines(t, 0, np.imag(symbols_upsampled), colors=color2, alpha=0.7)
+    ax1.scatter(t, np.imag(symbols_upsampled), label="Q", marker=".", alpha=0.7)
     ax1.legend()
 
     ax2.set_title("Symbols (Pulse Shaped)")
     ax2.set_xlabel("t")
-    ax2.plot(np.real(symbols_pulse_shaped), label="I")
-    ax2.plot(np.imag(symbols_pulse_shaped), label="Q")
+    ax2.plot(t, np.real(symbols_pulse_shaped), label="I", alpha=0.7)
+    ax2.plot(t, np.imag(symbols_pulse_shaped), label="Q", alpha=0.7)
     ax2.legend()
 
     symbol_freq, symbol_response = util.fft(
@@ -138,7 +154,7 @@ if PLOT_CONSTELLATION:
             plt.Circle((0, 0), 1, color="k", linewidth=1, fill=False, alpha=0.3)
         )
 
-    # TODO: plot received symbols
+    ax.plot(np.real(recovered_symbols), np.imag(recovered_symbols), ".")
     ax.plot(np.real(constellation), np.imag(constellation), "r.")
     for i, symbol in enumerate(constellation):
         ax.annotate(xy=(symbol.real, symbol.imag), text=f"{i:>0{MODULATION_ORDER}b}")
