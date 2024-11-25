@@ -65,6 +65,12 @@ def generate_pulse_shaping_filter(samples_per_symbol, ntaps=101, rolloff=0.35):
     return h
 
 
+def frequency_offset(s, fs, f):
+    """Apply a frequency offset of `f` Hz to a signal `s` at sample rate `fs`."""
+    t = np.linspace(0, 1 / fs * len(s), len(s))
+    return s * np.exp(1j * 2 * np.pi * f * t)
+
+
 def fft(s, fs=1.0, n=None):
     """Perform a `n`-point (default `len(s)`) Fast Fourier Transform of `s` at sample rate `fs`.
 

@@ -1,9 +1,48 @@
 import numpy as np
 
+import util
+
 
 def quantize(constellation, sample):
     """Quantizes a complex point `sample` to a point in `constellation`."""
     return constellation[np.argmin(np.abs(constellation - sample))]
+
+
+def coarse_frequency_correction(samples, fs, constellation):
+    """Perform a coarse frequency correction on `samples` by removing the most prominent frequency
+    from `samples` after repeated squaring.
+    """
+    squared_symbols = samples ** len(constellation)
+    freqs, response = util.fft(squared_symbols, fs=fs, n=1024 * 1024)
+    max_freq = freqs[np.argmax(response)]
+
+    return util.frequency_offset(samples, fs, -max_freq / len(constellation))
+
+
+def fine_frequency_correction(samples, constellation, ki=0.01, kp=0.1):
+    """Perform a fine frequency correction on `samples` using a decision-directed Costas loop."""
+    corrected_samples = np.empty_like(samples)
+    errors = np.empty_like(samples, dtype=float)
+
+    phase = 0
+    integral = 0
+
+    for i, sample in enumerate(samples):
+        # adjust the input sample by the inverse of the estimated phase offset
+        corrected_samples[i] = sample * np.exp(-1j * phase)
+
+        # determine the phase error
+        decision = quantize(constellation, corrected_samples[i])
+        error = np.angle(corrected_samples[i] * np.conj(decision))
+
+        # update the estimated phase offset
+        integral += error
+        errors[i] = ki * integral + kp * error
+
+        phase += errors[i]
+        phase = np.mod(phase, 2 * np.pi)
+
+    return corrected_samples, errors
 
 
 def recover_symbols_early_late(
@@ -42,16 +81,16 @@ def recover_symbols_early_late(
         error_real = (np.real(early) - np.real(late)) * np.real(prompt)
         error_imag = (np.imag(early) - np.imag(late)) * np.imag(prompt)
         error = error_real + error_imag
-        errors.append(error)
 
         # update the estimated phase offset
         mu -= error * loop_gain
+        errors.append(mu)
 
         # move the integer part of mu into i
         i += samples_per_symbol + int(mu)
         mu -= int(mu)
 
-    return recovered_symbols, np.array(errors)
+    return np.array(recovered_symbols), np.array(errors)
 
 
 def recover_symbols_gardner(
@@ -90,16 +129,16 @@ def recover_symbols_gardner(
         error_real = (np.real(late) - np.real(early)) * np.real(prompt)
         error_imag = (np.imag(late) - np.imag(early)) * np.imag(prompt)
         error = error_real + error_imag
-        errors.append(error)
 
         # update the estimated phase offset
         mu -= error * loop_gain
+        errors.append(mu)
 
         # move the integer part of mu into i
         i += samples_per_symbol + int(mu)
         mu -= int(mu)
 
-    return recovered_symbols, np.array(errors)
+    return np.array(recovered_symbols), np.array(errors)
 
 
 def recover_symbols_mueller_muller(
@@ -141,13 +180,13 @@ def recover_symbols_mueller_muller(
             prev_decision
         ) * np.imag(current_estimate)
         error = error_real + error_imag
-        errors.append(error)
 
         # update the estimated phase offset
         mu -= error * loop_gain
+        errors.append(mu)
 
         # move the integer part of mu into i
         i += samples_per_symbol + int(mu)
         mu -= int(mu)
 
-    return recovered_symbols, np.array(errors)
+    return np.array(recovered_symbols), np.array(errors)

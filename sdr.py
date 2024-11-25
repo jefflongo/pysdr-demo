@@ -10,12 +10,12 @@ import util
 #### CONFIGURATION #################################################################################
 
 # modulation configuration
-N_SYMBOLS = 1000
+N_SYMBOLS = 10000
 MODULATION_ORDER = 1
 MODULATE_QAM = False
 
 # sampling configuration
-SYMBOL_RATE_HZ = 100
+SYMBOL_RATE_HZ = 10000
 UPSAMPLE_RATE = 8
 SAMPLE_RATE_HZ = SYMBOL_RATE_HZ * UPSAMPLE_RATE
 
@@ -23,7 +23,7 @@ SAMPLE_RATE_HZ = SYMBOL_RATE_HZ * UPSAMPLE_RATE
 APPLY_NOISE = True
 SNR_DB = 20
 DELAY_SAMPLES = UPSAMPLE_RATE // 2
-FREQUENCY_OFFSET_HZ = 0.01
+FREQUENCY_OFFSET_HZ = int(0.01 * SAMPLE_RATE_HZ)
 
 # plotting configuration
 PLOT_PULSE_SHAPING_FILTER = False
@@ -62,11 +62,8 @@ if APPLY_NOISE:
     transmitted_signal = transmitted_signal + noise
 
 # apply frequency offset
-t_offset = np.linspace(
-    0, 1 / SAMPLE_RATE_HZ * len(transmitted_signal), len(transmitted_signal)
-)
-transmitted_signal = transmitted_signal * np.exp(
-    1j * 2 * np.pi * FREQUENCY_OFFSET_HZ * t_offset
+transmitted_signal = util.frequency_offset(
+    transmitted_signal, SAMPLE_RATE_HZ, FREQUENCY_OFFSET_HZ
 )
 
 #### RECEIVER ######################################################################################
@@ -76,9 +73,25 @@ GAIN_CORRECTION = UPSAMPLE_RATE
 received_signal = util.firfilter(transmitted_signal, h)
 received_signal /= GAIN_CORRECTION
 
+# coarse frequency correction
+received_signal_with_frequency_correction = (
+    demodulate.coarse_frequency_correction(
+        received_signal, SAMPLE_RATE_HZ, constellation
+    )
+    if not MODULATE_QAM or MODULATION_ORDER <= 2
+    else received_signal
+)
+
 # clock recovery
 recovered_symbols, symbol_recovery_fb = demodulate.recover_symbols_mueller_muller(
-    received_signal, UPSAMPLE_RATE, constellation
+    received_signal_with_frequency_correction, UPSAMPLE_RATE, constellation
+)
+
+# fine frequency correction
+recovered_symbols, freq_recovery_fb = (
+    demodulate.fine_frequency_correction(recovered_symbols, constellation)
+    if not MODULATE_QAM or MODULATION_ORDER <= 2
+    else recovered_symbols
 )
 
 #### PLOTS #########################################################################################
