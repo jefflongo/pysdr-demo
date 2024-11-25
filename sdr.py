@@ -10,7 +10,7 @@ import util
 #### CONFIGURATION #################################################################################
 
 # modulation configuration
-N_SYMBOLS = 100
+N_SYMBOLS = 1000
 MODULATION_ORDER = 1
 MODULATE_QAM = False
 
@@ -22,10 +22,12 @@ SAMPLE_RATE_HZ = SYMBOL_RATE_HZ * UPSAMPLE_RATE
 # noise configuration
 APPLY_NOISE = True
 SNR_DB = 20
+DELAY_SAMPLES = UPSAMPLE_RATE // 2
+FREQUENCY_OFFSET_HZ = 0.01
 
 # plotting configuration
 PLOT_PULSE_SHAPING_FILTER = False
-PLOT_PULSE_SHAPED_SYMBOLS = True
+PLOT_PULSE_SHAPED_SYMBOLS = False
 PLOT_CONSTELLATION = True
 
 #### TRANSMITTER ###################################################################################
@@ -49,24 +51,35 @@ symbols_pulse_shaped = util.firfilter(symbols_upsampled, h)
 
 #### WIRELESS CHANNEL ##############################################################################
 
+# delay
+transmitted_signal = np.concatenate(
+    [np.zeros(DELAY_SAMPLES, dtype=complex), symbols_pulse_shaped]
+)
+
 # apply noise
 if APPLY_NOISE:
-    noise = util.generate_awgn(symbols_pulse_shaped, SNR_DB)
-    symbols_pulse_shaped_with_noise = symbols_pulse_shaped + noise
-else:
-    symbols_pulse_shaped_with_noise = symbols_pulse_shaped
+    noise = util.generate_awgn(transmitted_signal, SNR_DB)
+    transmitted_signal = transmitted_signal + noise
 
-# TODO: frequency/timing offset
+# apply frequency offset
+t_offset = np.linspace(
+    0, 1 / SAMPLE_RATE_HZ * len(transmitted_signal), len(transmitted_signal)
+)
+transmitted_signal = transmitted_signal * np.exp(
+    1j * 2 * np.pi * FREQUENCY_OFFSET_HZ * t_offset
+)
 
 #### RECEIVER ######################################################################################
 
 # apply matched filter
 GAIN_CORRECTION = UPSAMPLE_RATE
-received_signal = util.firfilter(symbols_pulse_shaped_with_noise, h)
+received_signal = util.firfilter(transmitted_signal, h)
 received_signal /= GAIN_CORRECTION
 
 # clock recovery
-recovered_symbols = demodulate.recover_symbols_gardner(received_signal, UPSAMPLE_RATE)
+recovered_symbols, symbol_recovery_fb = demodulate.recover_symbols_mueller_muller(
+    received_signal, UPSAMPLE_RATE, constellation
+)
 
 #### PLOTS #########################################################################################
 
@@ -98,7 +111,7 @@ if PLOT_PULSE_SHAPING_FILTER:
 if PLOT_PULSE_SHAPED_SYMBOLS:
     fig, (ax1, ax2, ax3, ax4) = plt.subplots(4)
 
-    t = np.linspace(0, N_SYMBOLS * SAMPLE_RATE_HZ, SAMPLE_RATE_HZ)
+    t = np.linspace(0, N_SYMBOLS * SAMPLE_RATE_HZ, len(symbols_upsampled))
 
     color1, color2 = plt.rcParams["axes.prop_cycle"].by_key()["color"][:2]
     ax1.set_title("Symbols (Upsampled)")
@@ -109,6 +122,7 @@ if PLOT_PULSE_SHAPED_SYMBOLS:
     ax1.scatter(t, np.imag(symbols_upsampled), label="Q", marker=".", alpha=0.7)
     ax1.legend()
 
+    ax2.sharex(ax1)
     ax2.set_title("Symbols (Pulse Shaped)")
     ax2.set_xlabel("t")
     ax2.plot(t, np.real(symbols_pulse_shaped), label="I", alpha=0.7)
@@ -126,6 +140,7 @@ if PLOT_PULSE_SHAPED_SYMBOLS:
     symbol_ps_freq, symbol_ps_response = util.fft(
         symbols_pulse_shaped, fs=SAMPLE_RATE_HZ, n=1024
     )
+    ax4.sharex(ax3)
     ax4.set_title("Symbols (Pulse Shaped, Frequency Domain)")
     ax4.set_xlabel("f (Hz)")
     ax4.grid()
@@ -152,8 +167,26 @@ if PLOT_CONSTELLATION:
             plt.Circle((0, 0), 1, color="k", linewidth=1, fill=False, alpha=0.3)
         )
 
-    ax.plot(np.real(recovered_symbols), np.imag(recovered_symbols), ".")
-    ax.plot(np.real(constellation), np.imag(constellation), "r.")
+    ax.plot(
+        np.real(received_signal),
+        np.imag(received_signal),
+        ".",
+        alpha=0.05,
+        label="Received signal",
+    )
+    ax.plot(
+        np.real(recovered_symbols),
+        np.imag(recovered_symbols),
+        ".",
+        label="Recovered symbols",
+    )
+    ax.plot(
+        np.real(constellation),
+        np.imag(constellation),
+        "ro",
+        label="Optimal symbols",
+    )
+    ax.legend()
     for i, symbol in enumerate(constellation):
         ax.annotate(xy=(symbol.real, symbol.imag), text=f"{i:>0{MODULATION_ORDER}b}")
 
