@@ -91,8 +91,12 @@ recovered_symbols, symbol_recovery_fb = demodulate.recover_symbols_mueller_mulle
 recovered_symbols, freq_recovery_fb = (
     demodulate.fine_frequency_correction(recovered_symbols, constellation)
     if not MODULATE_QAM or MODULATION_ORDER <= 2
-    else recovered_symbols
+    else (recovered_symbols, None)
 )
+
+recovered_bits = demodulate.demodulate(constellation, recovered_symbols)
+bit_error_rate = np.sum(np.abs(bits - recovered_bits[-len(bits) :]))
+print(f"Bit Error Rate: {bit_error_rate} / {len(bits)}")
 
 #### PLOTS #########################################################################################
 
@@ -124,7 +128,7 @@ if PLOT_PULSE_SHAPING_FILTER:
 if PLOT_PULSE_SHAPED_SYMBOLS:
     fig, (ax1, ax2, ax3, ax4) = plt.subplots(4)
 
-    t = np.linspace(0, N_SYMBOLS * SAMPLE_RATE_HZ, len(symbols_upsampled))
+    t = np.linspace(0, len(symbols) * SAMPLE_RATE_HZ, len(symbols_upsampled))
 
     color1, color2 = plt.rcParams["axes.prop_cycle"].by_key()["color"][:2]
     ax1.set_title("Symbols (Upsampled)")

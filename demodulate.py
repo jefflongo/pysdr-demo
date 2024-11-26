@@ -3,9 +3,35 @@ import numpy as np
 import util
 
 
-def quantize(constellation, sample):
-    """Quantizes a complex point `sample` to a point in `constellation`."""
-    return constellation[np.argmin(np.abs(constellation - sample))]
+def nary_to_binary(nary, n):
+    """Converts the `n`-bit sequence `nary` to a binary sequence of length `n * len(nary)`."""
+    return (
+        ((np.array(nary).reshape(-1, 1) & (1 << np.arange(n - 1, -1, -1))) > 0)
+        .astype(int)
+        .flatten()
+    )
+
+
+def nearest_point_index(x, y):
+    """Returns the indices for which the values in `y` are nearest the values in `x`."""
+    return np.argmin(np.abs(y[:, None] - x), axis=0)
+
+
+def demodulate(constellation, samples):
+    """Demodulates complex samples `samples`."""
+    constellation_indices = nearest_point_index(samples, constellation)
+    order = int(np.log2(len(constellation)))
+    result = nary_to_binary(constellation_indices, order)
+
+    return result.item() if result.size == 1 else result
+
+
+def quantize(constellation, samples):
+    """Quantizes complex points `samples` to points in `constellation`."""
+    constellation_indices = nearest_point_index(samples, constellation)
+    result = constellation[constellation_indices]
+
+    return result.item() if result.size == 1 else result
 
 
 def coarse_frequency_correction(samples, fs, constellation):
